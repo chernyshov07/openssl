@@ -1,0 +1,39 @@
+name: Trivy Security Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Run Trivy filesystem scan
+        id: trivy-scan
+        run: |
+          # Запускаем сканирование и сохраняем выходные данные в файл
+          trivy fs --security-checks vuln --severity HIGH,CRITICAL . > trivy_results.txt
+          
+          # Проверяем наличие высоких уязвимостей
+          if grep -q 'HIGH' trivy_results.txt || grep -q 'CRITICAL' trivy_results.txt; then
+            echo "Vulnerabilities found!"
+            cat trivy_results.txt
+            exit 1
+          else
+            echo "No high or critical vulnerabilities found."
+            cat trivy_results.txt
+          fi
